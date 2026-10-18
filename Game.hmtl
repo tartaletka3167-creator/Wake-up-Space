@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Космическое вторжение</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; background: #000; overflow: hidden; font-family: 'Courier New', monospace; color: #fff; user-select: none; touch-action: none; }
+  @media (max-width: 900px) and (orientation: portrait) {
+    body { width: 100vh; height: 100vw; transform: rotate(90deg) translateY(-100%); transform-origin: top left; position: absolute; top: 0; left: 0; }
+  }
+  canvas { display: block; image-rendering: pixelated; }
+  
+  .screen { position: absolute; inset: 0; display: none; flex-direction: column; align-items: center; justify-content: center; }
+  .screen.active { display: flex; }
+
+  #lobby { 
+    background: linear-gradient(rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.7)), url('bg.jpg') no-repeat center center;
+    background-size: cover; z-index: 10; 
+  }
+  #lobby h1 { font-size: 38px; letter-spacing: 5px; margin-bottom: 30px; text-shadow: 0 0 20px #4af, 0 0 40px #4af; animation: flicker 3s infinite; text-align: center; }
+  @keyframes flicker { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
+  .btn { padding: 15px 50px; font-size: 20px; letter-spacing: 4px; background: rgba(0, 0, 0, 0.6); color: #4af; border: 2px solid #4af; border-radius: 8px; cursor: pointer; font-family: inherit; transition: all 0.3s; box-shadow: 0 0 10px #4af; margin: 10px; pointer-events: auto; backdrop-filter: blur(5px); }
+  .btn:hover { background: #4af; color: #000; box-shadow: 0 0 30px #4af; transform: scale(1.05); }
+  .wood-sign { position: absolute; background: linear-gradient(to bottom, #8b5a2b, #5c3a21); border: 4px solid #3e2715; border-radius: 5px; padding: 10px 20px; color: #f0d8b0; font-size: 14px; font-weight: bold; transform: rotate(-2deg); bottom: 30px; right: 30px; }
+  .wood-sign::before, .wood-sign::after { content: ''; position: absolute; width: 8px; height: 8px; background: #333; border-radius: 50%; }
+
+  #skinsMenu, #settingsMenu { background: rgba(0, 10, 20, 0.98); z-index: 20; }
+  .menu-title { font-size: 32px; letter-spacing: 6px; margin-bottom: 20px; text-shadow: 0 0 15px #4af; }
+  .skins-grid { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; max-width: 90%; max-height: 60vh; overflow-y: auto; padding: 10px; }
+  .skin-card { width: 120px; height: 160px; background: rgba(20, 40, 60, 0.8); border: 2px solid #4af; border-radius: 10px; display: flex; flex-direction: column; align-items: center; justify-content: space-between; padding: 10px; }
+  .skin-card.equipped { border-color: #0f0; box-shadow: 0 0 15px #0f0; }
+  .skin-preview { width: 50px; height: 50px; border-radius: 50%; background: #ddd; position: relative; }
+  .skin-name { font-size: 12px; text-align: center; }
+  .skin-btn { width: 100%; padding: 5px; background: transparent; border: 1px solid #4af; color: #4af; cursor: pointer; font-size: 11px; border-radius: 5px; }
+  .skin-btn:hover:not(:disabled) { background: #4af; color: #000; }
+  .setting-row { display: flex; justify-content: space-between; width: 300px; margin-bottom: 20px; font-size: 18px; }
+
+  #gameUI { position: absolute; inset: 0; pointer-events: none; z-index: 10; }
+  #inventory { position: absolute; top: 20px; left: 20px; background: rgba(0, 0, 0, 0.7); border: 2px solid #4af; padding: 10px 20px; border-radius: 8px; font-size: 20px; display: none; }
+  #hint-text { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 24px; opacity: 0; transition: opacity 0.3s; text-align: center; text-shadow: 0 0 10px #000; pointer-events: none; }
+  #hint-text.active { opacity: 1; }
+  #interact-btn { pointer-events: auto; position: absolute; bottom: 40px; right: 40px; background: rgba(68,170,255,0.2); border: 2px solid #4af; color: #4af; padding: 15px 30px; font-size: 18px; cursor: pointer; display: none; font-family: inherit; font-weight: bold; border-radius: 8px; }
+  #thought { position: absolute; bottom: 100px; left: 50%; transform: translateX(-50%); width: 80%; text-align: center; font-size: 22px; color: #ffcc00; text-shadow: 0 0 10px #000; opacity: 0; transition: opacity 1s; pointer-events: none; font-style: italic; }
+  #thought.active { opacity: 1; }
+
+  #joystick { position: absolute; bottom: 30px; left: 30px; width: 140px; height: 140px; border-radius: 50%; background: rgba(68,170,255,0.1); border: 2px solid rgba(68,170,255,0.4); display: none; z-index: 40; touch-action: none; }
+  #stick { position: absolute; top: 50%; left: 50%; width: 60px; height: 60px; margin: -30px 0 0 -30px; border-radius: 50%; background: rgba(68,170,255,0.6); box-shadow: 0 0 10px #4af; }
+
+  #sleepOverlay { position: absolute; inset: 0; background: #000; opacity: 0; pointer-events: none; transition: opacity 2s; z-index: 50; display: flex; align-items: center; justify-content: center; flex-direction: column; }
+  #sleepOverlay.active { opacity: 1; pointer-events: auto; }
+  #sleepText { font-size: 48px; color: #4af; letter-spacing: 10px; animation: pulse 2s infinite; }
+  @keyframes pulse { 0%, 100% { opacity: 0.5; } 50% { opacity: 1; } }
+
+  #scene { background: #000; padding: 0; z-index: 50; }
+  #caption { position: absolute; bottom: 80px; left: 50%; transform: translateX(-50%); width: 80%; text-align: center; font-size: 20px; opacity: 0; transition: opacity 0.5s; pointer-events: none; text-shadow: 0 0 10px #000; }
+  #weekLater { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 40px; color: #fff; letter-spacing: 10px; text-shadow: 0 0 20px #4af; opacity: 0; transition: opacity 1.5s; pointer-events: none; z-index: 40; }
+</style>
+</head>
+<body>
+
+<div id="lobby" class="screen active">
+  <h1>КОСМИЧЕСКОЕ<br>ВТОРЖЕНИЕ</h1>
+  <button id="playBtn" class="btn">ИГРАТЬ</button>
+  <button id="multiplayerBtn" class="btn">ИГРАТЬ С ДРУГОМ</button>
+  <button id="skinsBtn" class="btn">СКИНЫ</button>
+  <button id="settingsBtn" class="btn">НАСТРОЙКИ</button>
+  <div class="wood-sign">СОЗДАНО TARTALETKA</div>
+</div>
+
+<div id="skinsMenu" class="screen">
+  <div class="menu-title">СКИНЫ</div>
+  <div class="skins-grid" id="skinsGrid"></div>
+  <button id="closeSkins" class="btn" style="margin-top:20px;">НАЗАД</button>
+</div>
+
+<div id="settingsMenu" class="screen">
+  <div class="menu-title">НАСТРОЙКИ</div>
+  <div class="setting-row"><span>Громкость:</span><input type="range" id="volume" min="0" max="100" value="50"></div>
+  <div class="setting-row"><span>Пасхалки:</span><input type="checkbox" id="showEggs" checked></div>
+  <button id="closeSettings" class="btn" style="margin-top:20px;">НАЗАД</button>
+</div>
+
+<div id="gameScreen" class="screen">
+  <canvas id="cGame"></canvas>
+  <div id="gameUI">
+    <div id="inventory">Ключ: <span style="color: #0f0;">✔</span></div>
+    <div id="hint-text"></div>
+    <button id="interact-btn">ВЗАИМОДЕЙСТВОВАТЬ (E)</button>
+    <div id="thought"></div>
+  </div>
+  <div id="joystick"><div id="stick"></div></div>
+  
+  <div id="sleepOverlay">
+    <div id="sleepText">Zzz...</div>
+    <button id="wakeUpBtn" class="btn" style="margin-top: 30px;">ПРОСНУТЬСЯ</button>
+  </div>
+</div>
+
+<div id="scene" class="screen">
+  <canvas id="cCutscene"></canvas>
+  <div id="caption"></div>
+  <div id="weekLater">...ЧЕРЕЗ 1 НЕДЕЛЮ</div>
+</div>
+
+<script>
+try {
+  const skins = [
+    { id: 'default', name: 'Классический', color: '#e0e0e0', visor: '#0a2a4a' },
+    { id: 'red', name: 'Красный', color: '#cc3333', visor: '#ffcccc' },
+    { id: 'gold', name: 'Золотой', color: '#ffcc00', visor: '#fff0aa' },
+    { id: 'shadow', name: 'Тёмный', color: '#333', visor: '#4af' },
+    { id: 'green', name: 'Зелёный', color: '#33cc33', visor: '#ccffcc' },
+    { id: 'blue', name: 'Синий', color: '#3366cc', visor: '#aaccff' },
+    { id: 'purple', name: 'Фиолетовый', color: '#9933cc', visor: '#eebbff' },
+    { id: 'ice', name: 'Ледяной', color: '#aaffff', visor: '#004466' }
+  ];
+
+  let equippedSkin = localStorage.getItem('equippedSkin') || 'default';
+
+  function renderSkins() {
+    const grid = document.getElementById('skinsGrid');
+    grid.innerHTML = '';
+    skins.forEach(skin => {
+      const isEquipped = equippedSkin === skin.id;
+      const card = document.createElement('div');
+      card.className = `skin-card ${isEquipped ? 'equipped' : ''}`;
+      card.innerHTML = `
+        <div class="skin-preview" style="background:${skin.color}">
+          <div style="position:absolute;top:12px;left:8px;width:34px;height:20px;background:${skin.visor};border-radius:50%;"></div>
+        </div>
+        <div class="skin-name">${skin.name}</div>
+        <button class="skin-btn" data-id="${skin.id}">${isEquipped ? 'ВЫБРАН' : 'ВЫБРАТЬ'}</button>
+      `;
+      grid.appendChild(card);
+    });
+    document.querySelectorAll('.skin-btn').forEach(btn => btn.onclick = (e) => {
+      equippedSkin = e.target.dataset.id;
+      localStorage.setItem('equippedSkin', equippedSkin);
+      renderSkins();
+    });
+  }
+
+  document.getElementById('skinsBtn').onclick = () => { document.getElementById('skinsMenu').classList.add('active'); renderSkins(); };
+  document.getElementById('settingsBtn').onclick = () => { document.getElementById('settingsMenu').classList.add('active'); };
+  document.getElementById('closeSkins').onclick = () => document.getElementById('skinsMenu').classList.remove('active');
+  document.getElementById('closeSettings').onclick = () => { document.getElementById('settingsMenu').classList.remove('active'); };
+  document.getElementById('multiplayerBtn').onclick = () => alert('Этот режим пока недоступен.');
+
+  function drawAstronaut(ctx, x, y, scale, sColor, vColor, rot = 0) {
+    ctx.save(); ctx.translate(x, y); ctx.scale(scale, scale); ctx.rotate(rot);
+    ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.beginPath(); ctx.ellipse(0, 25, 20, 8, 0, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = sColor; ctx.strokeStyle = '#222'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(-25, 0, 10, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.arc(25, 0, 10, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.arc(0, 0, 22, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = vColor; ctx.beginPath(); ctx.ellipse(0, -5, 14, 10, 0, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+    ctx.restore();
+  }
+
+  const gameCanvas = document.getElementById('cGame'), gameCtx = gameCanvas.getContext('2d');
+  const cutCanvas = document.getElementById('cCutscene'), cutCtx = cutCanvas.getContext('2d');
+  let W, H;
+  function resize() { 
+    W = gameCanvas.width = cutCanvas.width = window.innerWidth; 
+    H = gameCanvas.height = cutCanvas.height = window.innerHeight; 
+    if (window.innerWidth < window.innerHeight && window.innerWidth < 900) { 
+      W = gameCanvas.width = cutCanvas.width = window.innerHeight; 
+      H = gameCanvas.height = cutCanvas.height = window.innerWidth; 
+    }
+  }
+  window.addEventListener('resize', resize); resize();
+
+  let player = { x: 0, y: 0, vx: 0, vy: 0, rot: 0 };
+  let keys = {}, joyX = 0, joyY = 0;
+  let hasKey = false;
+  let state = 'menu'; 
+  let t = 0, rafCutscene = null, shownCaption = -1;
+  let rafGame = null;
+
+  let sleepCount = parseInt(localStorage.getItem('sleepCount')) || 0; 
+  let hasMetNPC = localStorage.getItem('hasMetNPC') === 'true';
+  let npcWaiting = false;
+
+  const keyItem = { x: 200, y: -150, found: false };
+  const door = { x: 350, y: 0 }; 
+  const bed = { x: 0, y: 150 };
+
+  const gridPattern = document.createElement('canvas');
+  gridPattern.width = 100; gridPattern.height = 100;
+  const gctx = gridPattern.getContext('2d');
+  gctx.fillStyle = '#151520'; gctx.fillRect(0,0,100,100);
+  gctx.strokeStyle = '#2a2a3a'; gctx.lineWidth = 2;
+  gctx.beginPath(); gctx.moveTo(0,0); gctx.lineTo(100,0); gctx.stroke();
+  gctx.beginPath(); gctx.moveTo(0,0); gctx.lineTo(0,100); gctx.stroke();
+  const gridTexture = gameCtx.createPattern(gridPattern, 'repeat');
+
+  const planetCanvas = document.createElement('canvas');
+  planetCanvas.width = 600; planetCanvas.height = 600;
+  const pctx = planetCanvas.getContext('2d');
+  const r = 300;
+  pctx.beginPath(); pctx.arc(300, 300, r, 0, Math.PI*2); pctx.clip();
+  pctx.fillStyle = '#1a75d1'; pctx.fillRect(0, 0, 600, 600);
+  pctx.fillStyle = '#8b9299';
+  pctx.beginPath(); pctx.moveTo(300-r*1.1, 300-r*0.8); pctx.lineTo(300-r*0.2, 300-r*1.1); pctx.lineTo(300+r*0.1, 300-r*0.6); pctx.lineTo(300-r*0.1, 300-r*0.2); pctx.lineTo(300-r*0.4, 300+r*0.1); pctx.lineTo(300-r*0.8, 300+r*0.2); pctx.lineTo(300-r*1.1, 300-r*0.1); pctx.closePath(); pctx.fill();
+  const grad = pctx.createRadialGradient(300-r*0.3, 300-r*0.3, 10, 300, 300, r);
+  grad.addColorStop(0, 'rgba(255,255,255,0.2)'); grad.addColorStop(0.6, 'rgba(0,0,0,0)'); grad.addColorStop(1, 'rgba(0,0,0,0.8)');
+  pctx.fillStyle = grad; pctx.fillRect(0, 0, 600, 600);
+
+  document.getElementById('playBtn').onclick = () => {
+    document.getElementById('lobby').classList.remove('active');
+    document.getElementById('gameScreen').classList.add('active');
+    
+    if (localStorage.getItem('returnFromNPC') === 'true') {
+      localStorage.removeItem('returnFromNPC');
+      state = 'sleep';
+      sleepCount = 2;
+      hasMetNPC = true;
+      player = { x: 0, y: -100, vx: 0, vy: 0, rot: 0 };
+      setTimeout(() => {
+        document.getElementById('thought').textContent = "Теперь можно поспать...";
+        document.getElementById('thought').classList.add('active');
+        setTimeout(() => document.getElementById('thought').classList.remove('active'), 3000);
+      }, 1000);
+    } else {
+      state = 'search';
+      player = { x: 0, y: 0, vx: 0, vy: 0, rot: 0 };
+      hasKey = false;
+      keyItem.found = false;
+      sleepCount = 0;
+      hasMetNPC = false;
+      localStorage.setItem('sleepCount', 0);
+      localStorage.setItem('hasMetNPC', 'false');
+    }
+
+    document.getElementById('inventory').style.display = 'none';
+    document.getElementById('interact-btn').style.display = 'none';
+    document.getElementById('hint-text').classList.remove('active');
+    document.getElementById('joystick').style.display = 'block';
+    document.getElementById('sleepOverlay').classList.remove('active');
+    document.getElementById('thought').classList.remove('active');
+    
+    if (!rafGame) loopGame();
+  };
+
+  function loopGame() {
+    if (state === 'cutscene') { rafGame = requestAnimationFrame(loopGame); return; }
+    
+    gameCtx.fillStyle = gridTexture; 
+    gameCtx.fillRect(0, 0, W, H);
+
+    gameCtx.save();
+    gameCtx.translate(W/2 - player.x, H/2 - player.y);
+
+    gameCtx.strokeStyle = '#4af'; gameCtx.lineWidth = 10;
+    gameCtx.strokeRect(-400, -250, 800, 500);
+
+    if (!keyItem.found && state === 'search') {
+      gameCtx.fillStyle = '#ffd700'; gameCtx.beginPath(); gameCtx.arc(keyItem.x, keyItem.y, 15, 0, Math.PI*2); gameCtx.fill();
+      gameCtx.strokeStyle = '#b8860b'; gameCtx.lineWidth = 3; gameCtx.stroke();
+    }
+
+    gameCtx.fillStyle = '#0f0'; gameCtx.fillRect(door.x, door.y - 40, 20, 80);
+    
+    if (state === 'sleep' && hasMetNPC) {
+      gameCtx.fillStyle = '#444'; gameCtx.fillRect(bed.x, bed.y - 60, 120, 150);
+      gameCtx.fillStyle = '#1a5c9e'; gameCtx.fillRect(bed.x + 10, bed.y, 100, 80);
+    }
+
+    const skin = skins.find(s => s.id === equippedSkin) || skins[0];
+    drawAstronaut(gameCtx, player.x, player.y, 1.2, skin.color, skin.visor, player.rot);
+
+    gameCtx.restore();
+
+    if (state === 'search' || state === 'sleep') {
+      let speed = 4.5, tx = 0, ty = 0;
+      if (keys['ArrowUp'] || keys['KeyW']) ty -= 1;
+      if (keys['ArrowDown'] || keys['KeyS']) ty += 1;
+      if (keys['ArrowLeft'] || keys['KeyA']) tx -= 1;
+      if (keys['ArrowRight'] || keys['KeyD']) tx += 1;
+      tx += joyX; ty += joyY;
+
+      const len = Math.hypot(tx, ty);
+      if (len > 0) { tx /= len; ty /= len; }
+
+      player.vx += (tx * speed - player.vx) * 0.15;
+      player.vy += (ty * speed - player.vy) * 0.15;
+      player.x += player.vx; player.y += player.vy;
+
+      if (player.x < -380) player.x = -380; 
+      if (player.x > 380) player.x = 380;
+      if (player.y < -230) player.y = -230; 
+      if (player.y > 230) player.y = 230;
+      if (len > 0.1) player.rot = Math.atan2(ty, tx) + Math.PI / 2;
+
+      if (state === 'search') {
+        if (!keyItem.found && Math.hypot(player.x - keyItem.x, player.y - keyItem.y) < 40) {
+          keyItem.found = true; hasKey = true;
+          document.getElementById('inventory').style.display = 'block';
+          document.getElementById('hint-text').textContent = "Ключ найден! Идите к шлюзу.";
+          document.getElementById('hint-text').classList.add('active');
+          setTimeout(() => document.getElementById('hint-text').classList.remove('active'), 2000);
+        }
+        if (hasKey && Math.hypot(player.x - door.x, player.y - door.y) < 80) {
+          document.getElementById('interact-btn').style.display = 'block';
+          document.getElementById('interact-btn').textContent = 'ОТКРЫТЬ ШЛЮЗ (E)';
+        } else {
+          document.getElementById('interact-btn').style.display = 'none';
+        }
+      } else if (state === 'sleep') {
+        if (!hasMetNPC && Math.hypot(player.x - door.x, player.y - door.y) < 80) {
+          document.getElementById('interact-btn').style.display = 'block';
+          document.getElementById('interact-btn').textContent = 'ВЫЙТИ ИЗ КАПСУЛЫ (E)';
+        } 
+        else if (hasMetNPC && sleepCount < 2 && Math.hypot(player.x - bed.x, player.y - bed.y) < 80) {
+          document.getElementById('interact-btn').style.display = 'block';
+          document.getElementById('interact-btn').textContent = 'ПОСПАТЬ (E)';
+        } 
+        else {
+          document.getElementById('interact-btn').style.display = 'none';
+        }
+      }
+    }
+
+    rafGame = requestAnimationFrame(loopGame);
+  }
+
+  function interact() {
+    if (state === 'search' && hasKey && Math.hypot(player.x - door.x, player.y - door.y) < 80) {
+      state = 'cutscene';
+      document.getElementById('gameScreen').classList.remove('active');
+      document.getElementById('scene').classList.add('active');
+      startCutscene();
+    } 
+    else if (state === 'sleep') {
+      if (!hasMetNPC && Math.hypot(player.x - door.x, player.y - door.y) < 80) {
+        localStorage.setItem('returnFromNPC', 'true');
+        window.location.href = 'npc.html';
+      }
+      else if (hasMetNPC && sleepCount < 2 && Math.hypot(player.x - bed.x, player.y - bed.y) < 80) {
+        sleepCount++;
+        localStorage.setItem('sleepCount', sleepCount);
+        
+        document.getElementById('sleepOverlay').classList.add('active');
+        document.getElementById('sleepText').style.display = 'block';
+        document.getElementById('wakeUpBtn').style.display = 'none';
+        setTimeout(() => {
+          document.getElementById('sleepText').style.display = 'none';
+          document.getElementById('wakeUpBtn').style.display = 'block';
+          if (sleepCount === 1) {
+            document.getElementById('thought').textContent = "Я так устал... Мне снова хочется спать.";
+          } else if (sleepCount === 2) {
+            document.getElementById('thought').textContent = "Хватит спать. Пора заняться делами.";
+          }
+          document.getElementById('thought').classList.add('active');
+        }, 3000);
+      }
+    }
+  }
+
+  document.getElementById('interact-btn').onclick = interact;
+  window.addEventListener('keydown', e => {
+    keys[e.code] = true;
+    if (e.code === 'KeyE') interact();
+  });
+  window.addEventListener('keyup', e => keys[e.code] = false);
+
+  document.getElementById('wakeUpBtn').onclick = () => {
+    document.getElementById('sleepOverlay').classList.remove('active');
+  };
+
+  const captions = [
+    { t: 1.5, text: 'Где я?..' }, { t: 5, text: 'Передо мной планета...' }, { t: 9, text: 'Она... смотрит на меня?' },
+    { t: 15, text: 'ПРОБУЖДЕНИЕ НАЧАЛОСЬ' }
+  ];
+
+  function startCutscene() {
+    t = 0; shownCaption = -1; 
+    document.getElementById('caption').style.opacity = 1;
+    document.getElementById('weekLater').style.opacity = 0;
+    loopCutscene();
+  }
+
+  function loopCutscene() {
+    t += 1/60;
+    cutCtx.fillStyle = '#000'; cutCtx.fillRect(0, 0, W, H);
+    
+    for (let i = 0; i < 50; i++) {
+      cutCtx.fillStyle = `rgba(255,255,255,${0.3 + Math.sin(t + i) * 0.2})`;
+      cutCtx.beginPath(); cutCtx.arc((i*1234)%W, (i*567)%H, 1.5, 0, Math.PI*2); cutCtx.fill();
+    }
+
+    const cx = W*0.65, cy = H*0.5;
+    cutCtx.drawImage(planetCanvas, cx - 300, cy - 300);
+
+    if (t > 9) {
+      cutCtx.globalAlpha = Math.min(1, (t-9)/2);
+      cutCtx.save(); cutCtx.translate(cx, cy);
+      cutCtx.fillStyle = '#000'; cutCtx.strokeStyle = '#8c8c8c'; cutCtx.lineWidth = 10;
+      cutCtx.beginPath(); cutCtx.moveTo(-160, -40); cutCtx.lineTo(-130, -70); cutCtx.lineTo(-80, -60); cutCtx.lineTo(-40, -30); cutCtx.lineTo(-20, -10); cutCtx.lineTo(-60, -5); cutCtx.lineTo(-100, 0); cutCtx.lineTo(-140, -10); cutCtx.closePath(); cutCtx.fill(); cutCtx.stroke();
+      cutCtx.beginPath(); cutCtx.moveTo(160, -40); cutCtx.lineTo(130, -70); cutCtx.lineTo(80, -60); cutCtx.lineTo(40, -30); cutCtx.lineTo(20, -10); cutCtx.lineTo(60, -5); cutCtx.lineTo(100, 0); cutCtx.lineTo(140, -10); cutCtx.closePath(); cutCtx.fill(); cutCtx.stroke();
+      cutCtx.beginPath(); cutCtx.moveTo(-190, 45); cutCtx.lineTo(-140, 35); cutCtx.lineTo(-90, 45); cutCtx.lineTo(0, 40); cutCtx.lineTo(90, 45); cutCtx.lineTo(140, 35); cutCtx.lineTo(190, 45); cutCtx.quadraticCurveTo(150, 140, 0, 155); cutCtx.quadraticCurveTo(-150, 140, -190, 45); cutCtx.closePath(); cutCtx.fill(); cutCtx.stroke();
+      cutCtx.restore(); cutCtx.globalAlpha = 1;
+    }
+
+    cutCtx.strokeStyle = '#000'; cutCtx.lineWidth = 6;
+    cutCtx.beginPath(); cutCtx.arc(cx, cy, 300, 0, Math.PI*2); cutCtx.stroke();
+
+    const skin = skins.find(s => s.id === equippedSkin) || skins[0];
+    drawAstronaut(cutCtx, W*0.2, H*0.6, Math.min(W,H)/800, skin.color, skin.visor, 0);
+    if (t > 15) drawAstronaut(cutCtx, W*0.15, H*0.7, Math.min(W,H)/800, '#cc3333', '#ffcccc', 0);
+
+    for (let i = 0; i < captions.length; i++) {
+      if (t >= captions[i].t && shownCaption < i) { shownCaption = i; document.getElementById('caption').textContent = captions[i].text; }
+    }
+
+    if (t > 18) {
+      document.getElementById('caption').textContent = '';
+      document.getElementById('weekLater').style.opacity = 1;
+      if (t > 22) { 
+        cancelAnimationFrame(rafCutscene);
+        document.getElementById('scene').classList.remove('active');
+        document.getElementById('gameScreen').classList.add('active');
+        state = 'sleep'; 
+        player = { x: 0, y: -100, vx: 0, vy: 0, rot: 0 };
+        return;
+      }
+    }
+    rafCutscene = requestAnimationFrame(loopCutscene);
+  }
+
+  const joystick = document.getElementById('joystick'), stick = document.getElementById('stick');
+  function updateStick(e) {
+    const rect = joystick.getBoundingClientRect();
+    const touch = e.touches ? e.touches[0] : e;
+    let dx = touch.clientX - (rect.left + rect.width / 2);
+    let dy = touch.clientY - (rect.top + rect.height / 2);
+    const maxDist = 50; const dist = Math.hypot(dx, dy);
+    if (dist > maxDist) { dx = (dx/dist)*maxDist; dy = (dy/dist)*maxDist; }
+    stick.style.transform = `translate(${dx}px, ${dy}px)`;
+    joyX = dx/maxDist; joyY = dy/maxDist;
+  }
+  function resetStick() { stick.style.transform = 'translate(0px, 0px)'; joyX = 0; joyY = 0; }
+  joystick.addEventListener('touchstart', e => { e.preventDefault(); updateStick(e); });
+  joystick.addEventListener('touchmove', e => { e.preventDefault(); updateStick(e); });
+  joystick.addEventListener('touchend', e => { e.preventDefault(); resetStick(); });
+  joystick.addEventListener('mousedown', e => {
+    updateStick(e);
+    const onMove = ev => updateStick(ev);
+    const onUp = () => { resetStick(); window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
+    window.addEventListener('mousemove', onMove); window.addEventListener('mouseup', onUp);
+  });
+
+} catch (e) {
+  alert("Ошибка: " + e.message);
+}
+</script>
+</body>
+</html>
