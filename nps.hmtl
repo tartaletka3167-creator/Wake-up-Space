@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Встреча с НПС</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; background: #000; overflow: hidden; font-family: 'Courier New', monospace; color: #fff; user-select: none; touch-action: none; }
+  @media (max-width: 900px) and (orientation: portrait) {
+    body { width: 100vh; height: 100vw; transform: rotate(90deg) translateY(-100%); transform-origin: top left; position: absolute; top: 0; left: 0; }
+  }
+  canvas { display: block; }
+  
+  #ui { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; z-index: 10; pointer-events: none; }
+  
+  #text-box { background: rgba(0, 0, 0, 0.85); border: 2px solid #f00; border-radius: 10px; padding: 30px; max-width: 600px; text-align: center; pointer-events: auto; box-shadow: 0 0 20px rgba(255,0,0,0.5); }
+  #npc-name { font-size: 24px; color: #f00; text-shadow: 0 0 10px #f00; margin-bottom: 15px; letter-spacing: 2px; }
+  #npc-dialog { font-size: 20px; line-height: 1.5; margin-bottom: 30px; }
+  
+  .btn-group { display: flex; gap: 20px; justify-content: center; }
+  .choice-btn { padding: 12px 30px; font-size: 18px; cursor: pointer; font-family: inherit; font-weight: bold; border-radius: 8px; transition: all 0.2s; }
+  #acceptBtn { background: rgba(0, 200, 0, 0.2); border: 2px solid #0f0; color: #0f0; }
+  #acceptBtn:hover { background: #0f0; color: #000; box-shadow: 0 0 20px #0f0; }
+  #rejectBtn { background: rgba(200, 0, 0, 0.2); border: 2px solid #f00; color: #f00; }
+  #rejectBtn:hover { background: #f00; color: #000; box-shadow: 0 0 20px #f00; }
+</style>
+</head>
+<body>
+
+<canvas id="c"></canvas>
+
+<div id="ui">
+  <div id="text-box">
+    <div id="npc-name">НЕИЗВЕСТНЫЙ АСТРОНАВТ</div>
+    <div id="npc-dialog">"Привет... У меня закончился воздух. Можно мне войти в вашу капсулу? Я задержусь ненадолго..."</div>
+    <div class="btn-group">
+      <button id="acceptBtn" class="choice-btn">ВПУСТИТЬ</button>
+      <button id="rejectBtn" class="choice-btn">НЕ ВПУСКАТЬ</button>
+    </div>
+  </div>
+</div>
+
+<script>
+try {
+  const canvas = document.getElementById('c'), ctx = canvas.getContext('2d');
+  let W, H;
+  
+  function resize() { 
+    W = canvas.width = window.innerWidth; 
+    H = canvas.height = window.innerHeight; 
+    if (window.innerWidth < window.innerHeight && window.innerWidth < 900) { 
+      W = canvas.width = window.innerHeight; 
+      H = canvas.height = window.innerWidth; 
+    }
+  }
+  window.addEventListener('resize', resize); resize();
+
+  // Получаем скин игрока из памяти
+  const equippedSkin = localStorage.getItem('equippedSkin') || 'default';
+  const skins = {
+    'default': { color: '#e0e0e0', visor: '#0a2a4a' },
+    'red': { color: '#cc3333', visor: '#ffcccc' },
+    'gold': { color: '#ffcc00', visor: '#fff0aa' },
+    'shadow': { color: '#333', visor: '#4af' },
+    'green': { color: '#33cc33', visor: '#ccffcc' },
+    'blue': { color: '#3366cc', visor: '#aaccff' },
+    'purple': { color: '#9933cc', visor: '#eebbff' },
+    'ice': { color: '#aaffff', visor: '#004466' }
+  };
+  const playerSkin = skins[equippedSkin] || skins['default'];
+  const npcSkin = { color: '#cc3333', visor: '#ffcccc' }; // Красный НПС
+
+  function drawAstronaut(ctx, x, y, scale, sColor, vColor, flip = false) {
+    ctx.save(); 
+    ctx.translate(x, y); 
+    ctx.scale(flip ? -scale : scale, scale);
+    ctx.fillStyle = 'rgba(0,0,0,0.3)'; 
+    ctx.beginPath(); ctx.ellipse(0, 25, 20, 8, 0, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = sColor; ctx.strokeStyle = '#222'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(-25, 0, 10, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.arc(25, 0, 10, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.arc(0, 0, 22, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = vColor; ctx.beginPath(); ctx.ellipse(0, -5, 14, 10, 0, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+    ctx.restore();
+  }
+
+  let time = 0;
+  function loop() {
+    time += 1/60;
+    ctx.fillStyle = '#050510'; 
+    ctx.fillRect(0, 0, W, H);
+
+    // Звёзды на фоне (для красоты)
+    for (let i = 0; i < 100; i++) {
+      ctx.fillStyle = `rgba(255,255,255,${0.3 + Math.sin(time + i) * 0.2})`;
+      ctx.beginPath(); ctx.arc((i*137)%W, (i*213)%H, 1.5, 0, Math.PI*2); ctx.fill();
+    }
+
+    // Игрок (слева) и НПС (справа) смотрят друг на друга
+    drawAstronaut(ctx, W/2 - 150, H/2, 1.5, playerSkin.color, playerSkin.visor, false);
+    drawAstronaut(ctx, W/2 + 150, H/2, 1.5, npcSkin.color, npcSkin.visor, true);
+
+    requestAnimationFrame(loop);
+  }
+  loop();
+
+  // --- ОБРАБОТКА ВЫБОРА ---
+  document.getElementById('acceptBtn').onclick = () => {
+    localStorage.setItem('hasMetNPC', 'true');
+    localStorage.setItem('npcChoice', 'accept');
+    window.location.href = 'index.html'; // Возвращаемся в игру
+  };
+
+  document.getElementById('rejectBtn').onclick = () => {
+    localStorage.setItem('hasMetNPC', 'true');
+    localStorage.setItem('npcChoice', 'reject');
+    window.location.href = 'index.html'; // Возвращаемся в игру
+  };
+
+} catch (e) {
+  alert("Ошибка в NPC: " + e.message);
+}
+</script>
+</body>
+</html>
